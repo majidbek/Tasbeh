@@ -338,8 +338,18 @@ function up(){
 app.addEventListener('pointerup', up);
 app.addEventListener('pointercancel', up);
 
+// Zikr almashganda yangi zikrning talaffuzi (public/audio/<i>.mp3, tools/tts orqali yaratilgan).
+const VOICE = DH.map((_, i) => { const a = new Audio('audio/' + i + '.mp3'); a.preload = 'auto'; return a; });
+function sayDhikr(i){
+  try {
+    VOICE.forEach(a => { if (!a.paused) a.pause(); });
+    const a = VOICE[i]; a.currentTime = 0;
+    const pr = a.play(); if (pr) pr.catch(() => {});
+  } catch(e){}
+}
 function nextDhikr(){
   S.dh = (S.dh + 1) % DH.length; S.count = 0; finishRound(); render(); save(); hap();
+  sayDhikr(S.dh);
 }
 
 
