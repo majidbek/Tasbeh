@@ -163,7 +163,7 @@ function render(){
 }
 
 /* ---------- Ovoz: tasbeh sharigining "chiq" urilishi (Web Audio sintez) ---------- */
-let actx = null, noiseBuf = null;
+let actx = null, noiseBuf = null, master = null;
 function unlockAudio(){
   if (!S.snd) return;
   try {
@@ -173,30 +173,40 @@ function unlockAudio(){
       noiseBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.05), actx.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      // Baland ovoz xirillamasligi uchun yumshoq kompressor.
+      master = actx.createDynamicsCompressor();
+      master.threshold.value = -10; master.knee.value = 8; master.ratio.value = 4;
+      master.attack.value = 0.001; master.release.value = 0.08;
+      master.connect(actx.destination);
     }
     if (actx.state === 'suspended') actx.resume();
   } catch(e){}
 }
-// Bitta urilish: qisqa shovqin zarbasi (tosh/plastik) + ikki rezonans tovushi.
+// Bitta urilish — yog'och sharik: past "tuk" tanasi + yog'och rezonanslari + qisqa shovqin zarbasi.
 function knock(t, vol){
-  const v = 1 + (Math.random() - 0.5) * 0.12; // har safar biroz boshqacha
-  const out = actx.createGain(); out.connect(actx.destination);
-  out.gain.setValueAtTime(0.0001, t);
-  out.gain.exponentialRampToValueAtTime(vol, t + 0.0015);
-  out.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  const v = 1 + (Math.random() - 0.5) * 0.1; // har safar biroz boshqacha
   const n = actx.createBufferSource(); n.buffer = noiseBuf;
-  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3300 * v; bp.Q.value = 1.4;
-  n.connect(bp); bp.connect(out); n.start(t); n.stop(t + 0.05);
-  [[2350, 0.5, 0.045], [4100, 0.25, 0.03]].forEach(([f, g, d]) => {
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1700 * v; bp.Q.value = 0.9;
+  const ng = actx.createGain();
+  ng.gain.setValueAtTime(0.0001, t);
+  ng.gain.exponentialRampToValueAtTime(vol * 0.9, t + 0.001);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+  n.connect(bp); bp.connect(ng); ng.connect(master); n.start(t); n.stop(t + 0.04);
+  // [chastota, balandlik, so'nish]: yog'ochning past, iliq rezonanslari
+  [[620, 0.8, 0.07], [1080, 0.7, 0.055], [1890, 0.35, 0.035], [2950, 0.12, 0.02]].forEach(([f, g, d]) => {
     const o = actx.createOscillator(), og = actx.createGain();
-    o.type = 'sine'; o.frequency.value = f * v;
-    og.gain.setValueAtTime(vol * g, t); og.gain.exponentialRampToValueAtTime(0.0001, t + d);
-    o.connect(og); og.connect(actx.destination); o.start(t); o.stop(t + d + 0.01);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f * v * 1.06, t);
+    o.frequency.exponentialRampToValueAtTime(f * v, t + 0.012); // urilishdagi qisqa "tuk"
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(vol * g, t + 0.0015);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(og); og.connect(master); o.start(t); o.stop(t + d + 0.01);
   });
 }
 function clack(){
   if (!S.snd || !actx || actx.state !== 'running') return;
-  try { const t = actx.currentTime + 0.005; knock(t, 0.55); knock(t + 0.022, 0.18); } catch(e){}
+  try { const t = actx.currentTime + 0.005; knock(t, 0.9); knock(t + 0.028, 0.28); } catch(e){}
 }
 
 /* ---------- Geometry ---------- */
