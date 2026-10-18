@@ -24,6 +24,11 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #ar{font-family:Amiri,serif;font-size:31px;direction:rtl;line-height:1.5}
 #tr{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:23px;color:#e8e8e8}
 #stats{position:absolute;top:calc(14px + var(--st));left:16px;font-size:13px;color:#6f6f6f;pointer-events:none}
+#snd{position:absolute;top:calc(6px + var(--st));right:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:6}
+#snd svg{width:22px;height:22px;stroke:#6f6f6f}
+#snd .x{display:none}
+#snd.off .w{display:none}
+#snd.off .x{display:inline}
 #hint{position:absolute;bottom:calc(28px + var(--sb));left:0;right:0;text-align:center;font-size:13px;color:#666;transition:opacity .6s;pointer-events:none}
 #hand{position:absolute;left:0;top:0;width:300px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:5;will-change:transform;filter:drop-shadow(0 4px 10px rgba(0,0,0,.8))}
 #hand svg{display:block;width:100%;height:auto;overflow:visible}
@@ -44,6 +49,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 <div id="app">
   <canvas id="c"></canvas>
   <div id="stats"></div>
+  <div id="snd" class="ui" role="button" aria-label="Ovoz"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></div>
   <div id="top">
     <div id="count">0</div>
     <div id="target" class="ui">/ <span id="tnum">100</span>
@@ -104,7 +110,7 @@ const DH = [
 
 /* ---------- Saqlash: localStorage + Telegram CloudStorage (qurilmalararo) ---------- */
 const KEY = 'tasbeh_v1';
-let S = {count:0, target:100, dh:3, rounds:0, total:0, ts:0};
+let S = {count:0, target:100, dh:3, rounds:0, total:0, ts:0, snd:true};
 function valid(v){ return v && typeof v === 'object' && Number.isFinite(v.total); }
 try { const v = JSON.parse(localStorage.getItem(KEY)); if (valid(v)) S = Object.assign(S, v); } catch(e){}
 
@@ -153,6 +159,44 @@ function render(){
   $('ar').textContent = DH[S.dh].ar;
   $('tr').textContent = DH[S.dh].tr;
   $('stats').textContent = 'Davra: ' + S.rounds + '  ·  Jami: ' + S.total;
+  $('snd').classList.toggle('off', !S.snd);
+}
+
+/* ---------- Ovoz: tasbeh sharigining "chiq" urilishi (Web Audio sintez) ---------- */
+let actx = null, noiseBuf = null;
+function unlockAudio(){
+  if (!S.snd) return;
+  try {
+    if (!actx){
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      actx = new AC();
+      noiseBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * 0.05), actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (actx.state === 'suspended') actx.resume();
+  } catch(e){}
+}
+// Bitta urilish: qisqa shovqin zarbasi (tosh/plastik) + ikki rezonans tovushi.
+function knock(t, vol){
+  const v = 1 + (Math.random() - 0.5) * 0.12; // har safar biroz boshqacha
+  const out = actx.createGain(); out.connect(actx.destination);
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(vol, t + 0.0015);
+  out.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  const n = actx.createBufferSource(); n.buffer = noiseBuf;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3300 * v; bp.Q.value = 1.4;
+  n.connect(bp); bp.connect(out); n.start(t); n.stop(t + 0.05);
+  [[2350, 0.5, 0.045], [4100, 0.25, 0.03]].forEach(([f, g, d]) => {
+    const o = actx.createOscillator(), og = actx.createGain();
+    o.type = 'sine'; o.frequency.value = f * v;
+    og.gain.setValueAtTime(vol * g, t); og.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(og); og.connect(actx.destination); o.start(t); o.stop(t + d + 0.01);
+  });
+}
+function clack(){
+  if (!S.snd || !actx || actx.state !== 'running') return;
+  try { const t = actx.currentTime + 0.005; knock(t, 0.55); knock(t + 0.022, 0.18); } catch(e){}
 }
 
 /* ---------- Geometry ---------- */
@@ -214,9 +258,14 @@ function bead(s){
   ctx.beginPath(); ctx.ellipse(x - r*0.33, y - r*0.45, r*0.26, r*0.12, -0.55, 0, Math.PI*2); ctx.fill();
 }
 
-let p = 0; // 0..1 harakat bosqichi
+let demo = null; // o'rgatuvchi animatsiya holati (pastda)
+let p = 0, lastP = 0; // 0..1 harakat bosqichi
+const hitP = () => (Rs - Ls - D) / (Rs - Ls); // harakatdagi sharik o'ng guruhga tegadigan bosqich
 function draw(){
   if (!pts.length) return;
+  // Harakatdagi sharik o'ng guruhga tekkan lahzada ovoz chiqadi.
+  if (lastP < hitP() && p >= hitP() && !demo) clack();
+  lastP = p;
   ctx.clearRect(0,0,W,H);
   const jolt = Math.sin(Math.PI * p) * r * 0.75; // tasbeh o'ngga surilib qaytadi
   ctx.save(); ctx.translate(jolt, 0);
@@ -244,12 +293,14 @@ function draw(){
 /* ---------- Animation ---------- */
 let anim = null, animTo = 0;
 const ease = t => 1 - Math.pow(1 - t, 3);
-function runTo(to, dur, done){
+const easeIO = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+function runTo(to, dur, done, fn){
+  fn = fn || ease;
   if (anim) cancelAnimationFrame(anim);
   const from = p, t0 = performance.now(); animTo = to;
   function f(now){
     const k = Math.min(1, (now - t0) / dur);
-    p = from + (to - from) * ease(k);
+    p = from + (to - from) * fn(k);
     draw();
     if (k < 1) anim = requestAnimationFrame(f);
     else { anim = null; done && done(); }
@@ -259,7 +310,8 @@ function runTo(to, dur, done){
 function stopAnim(){
   if (!anim) return;
   cancelAnimationFrame(anim); anim = null;
-  if (animTo === 1) commit(); else { p = 0; draw(); }
+  if (animTo === 1){ if (lastP < hitP()) clack(); commit(); } // tez bosilganda ham ovoz yo'qolmasin
+  else { p = 0; draw(); }
 }
 
 let doneTimer = null;
@@ -284,11 +336,12 @@ function commit(){
   render(); save();
 }
 
-function fire(){ stopAnim(); runTo(1, 240, commit); }
+function fire(){ stopAnim(); runTo(1, 520, commit, easeIO); } // bosilganda sharik ravon, sekinroq o'tadi
 
 /* ---------- Input ---------- */
 let drag = null;
 app.addEventListener('pointerdown', e => {
+  unlockAudio();
   if (e.target.closest('.ui:not(#dhikr)')) return;
   stopAnim();
   drag = { x: e.clientX, moved: false, dhikr: !!e.target.closest('#dhikr') };
@@ -316,6 +369,11 @@ app.addEventListener('pointercancel', up);
 function nextDhikr(){
   S.dh = (S.dh + 1) % DH.length; S.count = 0; finishRound(); render(); save(); hap();
 }
+
+$('snd').addEventListener('click', () => {
+  S.snd = !S.snd; save(); render();
+  if (S.snd){ unlockAudio(); setTimeout(clack, 30); }
+});
 
 /* ---------- Target modal ---------- */
 const modal = $('modal'), chips = $('chips'), tin = $('tin');
@@ -363,7 +421,6 @@ if (tg && can('8.0')) { tg.onEvent('safeAreaChanged', applyViewport); tg.onEvent
 // Barmoq sharikni o'ngga suradi va hisob 1 → 2 → 3 bo'lib oshadi; birinchi teginishda to'xtaydi.
 const hand = $('hand');
 const SWIPE = 1400, REPS = 3, CYCLE = SWIPE * REPS + 1200;
-let demo = null;
 const easeInOut = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2;
 function demoFrame(now){
   const t = (now - demo.t0) % CYCLE, i = Math.floor(t / SWIPE), k = t - i * SWIPE;
