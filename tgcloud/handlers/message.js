@@ -3,9 +3,31 @@
 
 import { api } from 'sdk';
 import { APP_URL } from '../lib/config.js';
+import { SUPPORT_CONTACT } from '../lib/support.js';
 
 export default async function (message) {
   if (message.chat.type !== 'private') return;
+
+  // Stars xayriyasi muvaffaqiyatli o'tdi.
+  if (message.successful_payment) {
+    const stars = message.successful_payment.total_amount;
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `Rahmat! ${stars} ⭐ xayriyangiz qabul qilindi. Alloh qabul qilsin va rozi bo‘lsin! 🤲`,
+    });
+    return;
+  }
+
+  // Telegram to'lov qoidalari bo'yicha majburiy buyruq.
+  if (message.text === '/paysupport') {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: 'To‘lov bo‘yicha savol yoki muammo bo‘lsa, ' +
+        (SUPPORT_CONTACT ? `${SUPPORT_CONTACT} ga yozing.` : 'bot egasiga murojaat qiling.') +
+        ' Xayriyalar ixtiyoriy; xato to‘lov bo‘lsa, yozing — ko‘rib chiqamiz.',
+    });
+    return;
+  }
 
   if (!APP_URL) {
     await api.sendMessage({ chat_id: message.chat.id, text: 'Tasbeh hali sozlanmoqda, birozdan keyin urinib ko‘ring.' });

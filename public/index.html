@@ -32,14 +32,20 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #hint{position:absolute;bottom:calc(28px + var(--sb));left:0;right:0;text-align:center;font-size:13px;color:#666;transition:opacity .6s;pointer-events:none}
 #hand{position:absolute;left:0;top:0;width:300px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:5;will-change:transform;filter:drop-shadow(0 4px 10px rgba(0,0,0,.8))}
 #hand svg{display:block;width:100%;height:auto;overflow:visible}
-#modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
-#modal.open{display:flex}
-#sheet{width:100%;max-width:480px;background:#141414;border-radius:20px 20px 0 0;padding:22px 16px calc(22px + var(--sb))}
-#sheet h3{font-size:17px;font-weight:500;margin-bottom:14px}
+.modal{position:fixed;inset:0;color:#fff;font-family:Poppins,sans-serif;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
+.modal.open{display:flex}
+.sheet{width:100%;max-width:480px;background:#141414;border-radius:20px 20px 0 0;padding:22px 16px calc(22px + var(--sb))}
+.sheet h3{font-size:17px;font-weight:500;margin-bottom:14px}
+.sheet p{font-size:14px;color:#9a9a9a;line-height:1.5;margin:-6px 0 14px}
+#don{position:absolute;top:calc(6px + var(--st));right:50px;width:40px;height:40px;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:6}
+#don.on{display:flex}
+#don svg{width:22px;height:22px;stroke:#e8b931}
+.star{background:#e8b931;color:#000}
+.btn:disabled{opacity:.6}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .chip{background:#222;border:1px solid #2e2e2e;color:#ddd;border-radius:12px;padding:9px 16px;font:500 15px Poppins,sans-serif;cursor:pointer}
 .chip.on{background:#1ec760;color:#000;border-color:#1ec760}
-#tin{width:100%;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:12px;color:#fff;font:500 16px Poppins,sans-serif;padding:12px;margin-bottom:14px;user-select:text;-webkit-user-select:text}
+#tin,#din{width:100%;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:12px;color:#fff;font:500 16px Poppins,sans-serif;padding:12px;margin-bottom:14px;user-select:text;-webkit-user-select:text}
 .btn{width:100%;border:0;border-radius:12px;padding:13px;font:600 15px Poppins,sans-serif;cursor:pointer;margin-top:8px}
 .ok{background:#1ec760;color:#000}
 .rs{background:transparent;color:#ff5c5c;border:1px solid #3a1c1c}
@@ -49,6 +55,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 <div id="app">
   <canvas id="c"></canvas>
   <div id="stats"></div>
+  <div id="don" class="ui" role="button" aria-label="Qo'llab-quvvatlash"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></div>
   <div id="snd" class="ui" role="button" aria-label="Ovoz"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></div>
   <div id="top">
     <div id="count">0</div>
@@ -65,13 +72,23 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
   <div id="hint">Shariklarni o'ngga suring yoki ekranga bosing</div>
 </div>
 
-<div id="modal" class="ui">
-  <div id="sheet">
+<div id="modal" class="modal ui">
+  <div class="sheet">
     <h3>Maqsad soni</h3>
     <div class="chips" id="chips"></div>
     <input id="tin" type="number" inputmode="numeric" min="1" max="100000" placeholder="Boshqa son kiriting">
     <button class="btn ok" id="save">Saqlash</button>
     <button class="btn rs" id="reset">Hisobni nolga tushirish</button>
+  </div>
+</div>
+
+<div id="dmodal" class="modal ui">
+  <div class="sheet">
+    <h3>⭐ Tasbeh’ni qo‘llab-quvvatlang</h3>
+    <p>Ilova bepul va reklamasiz. Telegram Stars bilan qilgan xayriyangiz uni rivojlantirishga yordam beradi.</p>
+    <div class="chips" id="dchips"></div>
+    <input id="din" type="number" inputmode="numeric" min="1" max="10000" placeholder="Boshqa miqdor (⭐)">
+    <button class="btn star" id="dsend">⭐ Yuborish</button>
   </div>
 </div>
 
@@ -387,6 +404,7 @@ $('snd').addEventListener('click', () => {
 
 /* ---------- Target modal ---------- */
 const modal = $('modal'), chips = $('chips'), tin = $('tin');
+const dmodal = $('dmodal'), dchips = $('dchips'), din = $('din'), dsend = $('dsend');
 const PRESETS = [33, 99, 100, 500, 1000];
 const backBtn = can('6.1') && tg.BackButton;
 function openModal(){
@@ -403,8 +421,8 @@ function openModal(){
   if (backBtn) backBtn.show();
 }
 function closeModal(){
-  tin.blur();
-  modal.classList.remove('open');
+  tin.blur(); din.blur();
+  modal.classList.remove('open'); dmodal.classList.remove('open');
   if (backBtn) backBtn.hide();
 }
 if (backBtn) backBtn.onClick(closeModal);
@@ -415,6 +433,43 @@ $('save').onclick = () => {
   if (v > 0 && v <= 100000){ S.target = v; if (S.count >= v) S.count = 0; }
   closeModal(); render(); save();
 };
+/* ---------- Telegram Stars xayriya ---------- */
+const DONATE = [10, 50, 100, 250, 500];
+const canDonate = can('6.1') && tg.Serverless && tg.openInvoice;
+if (canDonate) $('don').classList.add('on');
+function donAmount(){ const v = parseInt(din.value, 10); return v >= 1 && v <= 10000 ? v : 0; }
+function donLabel(){ const v = donAmount(); dsend.textContent = v ? '⭐ ' + v + ' Stars yuborish' : '⭐ Miqdorni tanlang'; }
+function openDonate(){
+  dchips.innerHTML = '';
+  DONATE.forEach(v => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (v === 50 ? ' on' : '');
+    b.textContent = '⭐ ' + v;
+    b.onclick = () => { din.value = v; [...dchips.children].forEach(c => c.classList.toggle('on', c === b)); donLabel(); };
+    dchips.appendChild(b);
+  });
+  din.value = 50; donLabel(); dsend.disabled = false;
+  dmodal.classList.add('open');
+  if (backBtn) backBtn.show();
+}
+$('don').addEventListener('click', openDonate);
+dmodal.addEventListener('click', e => { if (e.target === dmodal) closeModal(); });
+din.addEventListener('input', () => { [...dchips.children].forEach(c => c.classList.toggle('on', c.textContent === '⭐ ' + din.value)); donLabel(); });
+dsend.onclick = () => {
+  const amount = donAmount();
+  if (!amount || dsend.disabled) return;
+  dsend.disabled = true; dsend.textContent = '…';
+  tg.Serverless.call('donate', { amount }, (err, res) => {
+    dsend.disabled = false; donLabel();
+    if (err || !res || !res.url) { tg.showAlert((err && err.message) || 'Xatolik yuz berdi, qayta urinib ko‘ring.'); return; }
+    tg.openInvoice(res.url, status => {
+      if (status !== 'paid') return;
+      closeModal(); hap('ok');
+      tg.showAlert('Rahmat! ' + amount + ' ⭐ qabul qilindi. Alloh rozi bo‘lsin! 🤲');
+    });
+  });
+};
+
 $('reset').onclick = () => {
   const doReset = () => {
     S.count = 0; S.rounds = 0; S.total = 0; finishRound();
