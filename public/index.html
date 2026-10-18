@@ -25,6 +25,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #tr{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:23px;color:#e8e8e8}
 #stats{position:absolute;top:calc(14px + var(--st));left:16px;font-size:13px;color:#6f6f6f;pointer-events:none}
 #hint{position:absolute;bottom:calc(28px + var(--sb));left:0;right:0;text-align:center;font-size:13px;color:#666;transition:opacity .6s;pointer-events:none}
+#hand{position:absolute;left:0;top:0;font-size:54px;line-height:1;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5;will-change:transform;filter:drop-shadow(0 6px 10px rgba(0,0,0,.7))}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
 #modal.open{display:flex}
 #sheet{width:100%;max-width:480px;background:#141414;border-radius:20px 20px 0 0;padding:22px 16px calc(22px + var(--sb))}
@@ -49,6 +50,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
     </div>
   </div>
   <div id="dhikr" class="ui"><div id="ar"></div><div id="tr"></div></div>
+  <div id="hand">👆</div>
   <div id="hint">Shariklarni o'ngga suring yoki ekranga bosing</div>
 </div>
 
@@ -120,7 +122,7 @@ if (cloud) {
   try {
     cloud.getItem(KEY, (err, val) => {
       if (err || !val) return;
-      try { const v = JSON.parse(val); if (valid(v) && (v.ts || 0) > (S.ts || 0)) { S = Object.assign(S, v); render(); try { localStorage.setItem(KEY, val); } catch(e){} } } catch(e){}
+      try { const v = JSON.parse(val); if (valid(v) && (v.ts || 0) > (S.ts || 0)) { S = Object.assign(S, v); if (S.total > 0) { stopDemo(); $('hint').style.opacity = 0; } render(); try { localStorage.setItem(KEY, val); } catch(e){} } } catch(e){}
     });
   } catch(e){}
 }
@@ -352,8 +354,46 @@ $('reset').onclick = () => {
 window.addEventListener('resize', layout);
 if (tg) tg.onEvent('viewportChanged', e => { if (!e || e.isStateStable) { applyViewport(); layout(); } });
 if (tg && can('8.0')) { tg.onEvent('safeAreaChanged', applyViewport); tg.onEvent('contentSafeAreaChanged', applyViewport); }
+/* ---------- O'rgatuvchi animatsiya (faqat yangi foydalanuvchilar uchun) ---------- */
+// Barmoq sharikni o'ngga suradi va hisob 1 → 2 → 3 bo'lib oshadi; birinchi teginishda to'xtaydi.
+const hand = $('hand');
+const SWIPE = 1400, REPS = 3, CYCLE = SWIPE * REPS + 1200;
+let demo = null;
+const easeInOut = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2;
+function demoFrame(now){
+  const t = (now - demo.t0) % CYCLE, i = Math.floor(t / SWIPE), k = t - i * SWIPE;
+  let shown, hp = 0;
+  if (i >= REPS){ p = 0; shown = REPS; hand.style.opacity = 0; hp = 1; }
+  else if (k < 250){ p = 0; shown = i; hand.style.opacity = 1; }
+  else if (k < 900){ p = easeInOut((k - 250) / 650); hp = p; shown = i; hand.style.opacity = 1; }
+  else { p = 0; hp = 1; shown = i + 1; hand.style.opacity = 0; }
+  if (pts.length){
+    draw();
+    const [x, y] = at(Ls + (Rs - Ls) * hp), jolt = Math.sin(Math.PI * p) * r * 0.75;
+    hand.style.transform = 'translate(' + (x + jolt - 22) + 'px,' + (y + r * 0.2) + 'px)';
+  }
+  if (shown !== demo.shown){
+    demo.shown = shown; countEl.textContent = shown;
+    if (shown > 0){ countEl.classList.add('bump'); setTimeout(() => countEl.classList.remove('bump'), 120); }
+  }
+  demo.raf = requestAnimationFrame(demoFrame);
+}
+function startDemo(){
+  if (demo) return;
+  demo = { t0: performance.now(), shown: -1, raf: 0 };
+  demo.raf = requestAnimationFrame(demoFrame);
+}
+function stopDemo(){
+  if (!demo) return;
+  cancelAnimationFrame(demo.raf); demo = null;
+  hand.style.opacity = 0; p = 0; draw(); render();
+}
+app.addEventListener('pointerdown', stopDemo, true);
+modal.addEventListener('pointerdown', stopDemo, true);
+
 if (S.total > 0) $('hint').style.opacity = 0;
 render(); layout();
+if (S.total === 0) setTimeout(() => { if (S.total === 0) startDemo(); }, 600);
 if (document.fonts) document.fonts.ready.then(render);
 })();
 </script>
