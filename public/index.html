@@ -25,7 +25,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #tr{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:23px;color:#e8e8e8}
 #stats{position:absolute;top:calc(14px + var(--st));left:16px;font-size:13px;color:#6f6f6f;pointer-events:none}
 #hint{position:absolute;bottom:calc(28px + var(--sb));left:0;right:0;text-align:center;font-size:13px;color:#666;transition:opacity .6s;pointer-events:none}
-#hand{position:absolute;left:0;top:0;font-size:54px;line-height:1;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5;will-change:transform;filter:drop-shadow(0 6px 10px rgba(0,0,0,.7))}
+#hand{position:absolute;left:0;top:0;width:300px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:5;will-change:transform;transform-origin:100% 100%;filter:drop-shadow(0 4px 10px rgba(0,0,0,.8))}
+#hand svg{display:block;width:100%;height:auto;overflow:visible}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
 #modal.open{display:flex}
 #sheet{width:100%;max-width:480px;background:#141414;border-radius:20px 20px 0 0;padding:22px 16px calc(22px + var(--sb))}
@@ -50,7 +51,11 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
     </div>
   </div>
   <div id="dhikr" class="ui"><div id="ar"></div><div id="tr"></div></div>
-  <div id="hand">👆</div>
+  <div id="hand"><svg viewBox="0 0 400 300" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M420 92 C350 104 268 82 186 58 C128 41 76 26 44 31 C14 36 4 76 26 98 C56 126 118 140 172 166 C236 197 292 246 330 320"/>
+    <path d="M58 37 C36 44 30 78 46 92 C58 84 72 78 92 76"/>
+    <path d="M300 236 C330 220 370 214 420 214"/>
+  </svg></div>
   <div id="hint">Shariklarni o'ngga suring yoki ekranga bosing</div>
 </div>
 
@@ -284,9 +289,9 @@ function fire(){ stopAnim(); runTo(1, 240, commit); }
 /* ---------- Input ---------- */
 let drag = null;
 app.addEventListener('pointerdown', e => {
-  if (e.target.closest('.ui')) return;
+  if (e.target.closest('.ui:not(#dhikr)')) return;
   stopAnim();
-  drag = { x: e.clientX, moved: false };
+  drag = { x: e.clientX, moved: false, dhikr: !!e.target.closest('#dhikr') };
   try { app.setPointerCapture(e.pointerId); } catch(_){}
 });
 app.addEventListener('pointermove', e => {
@@ -301,16 +306,16 @@ app.addEventListener('pointermove', e => {
 function up(){
   if (!drag) return;
   const d = drag; drag = null;
-  if (!d.moved) fire();
+  if (!d.moved) d.dhikr ? nextDhikr() : fire();
   else if (p > 0.3) runTo(1, 160, commit);
   else runTo(0, 180);
 }
 app.addEventListener('pointerup', up);
 app.addEventListener('pointercancel', up);
 
-$('dhikr').addEventListener('click', () => {
+function nextDhikr(){
   S.dh = (S.dh + 1) % DH.length; S.count = 0; finishRound(); render(); save(); hap();
-});
+}
 
 /* ---------- Target modal ---------- */
 const modal = $('modal'), chips = $('chips'), tin = $('tin');
@@ -369,8 +374,11 @@ function demoFrame(now){
   else { p = 0; hp = 1; shown = i + 1; hand.style.opacity = 0; }
   if (pts.length){
     draw();
-    const [x, y] = at(Ls + (Rs - Ls) * hp), jolt = Math.sin(Math.PI * p) * r * 0.75;
-    hand.style.transform = 'translate(' + (x + jolt - 22) + 'px,' + (y + r * 0.2) + 'px)';
+    // Bosh barmoq shariklar ostida chapdan o'ngga suradi (sharikka tegish shart emas).
+    const hw = W * 0.78, tipX = hw * 0.04, tipY = hw * 0.75 * 0.2;
+    const x = W * 0.14 + W * 0.42 * hp, y = H * 0.80;
+    hand.style.width = hw + 'px';
+    hand.style.transform = 'translate(' + (x - tipX) + 'px,' + (y - tipY) + 'px) rotate(' + (6 - 10 * hp) + 'deg)';
   }
   if (shown !== demo.shown){
     demo.shown = shown; countEl.textContent = shown;
