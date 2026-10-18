@@ -1,0 +1,28 @@
+name: Generate dhikr audio
+
+on:
+  push:
+    paths: [tools/tts/**]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install edge-tts==7.0.2
+      - run: python tools/tts/generate.py
+      - name: Commit audio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git add public/audio
+          git diff --cached --quiet && { echo "No changes"; exit 0; }
+          git commit -m "Generate dhikr audio (edge-tts)"
+          git push
