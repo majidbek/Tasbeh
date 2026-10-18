@@ -50,7 +50,12 @@ jobs:
           npx tgcloud --no-pager push --force
 
       - name: Sync webhook
-        run: npx tgcloud --no-pager webhook sync
+        run: |
+          for i in 1 2 3 4; do
+            npx tgcloud --no-pager webhook sync && exit 0
+            sleep $((i * 3))
+          done
+          exit 1
 
       - name: Summary
         run: |
