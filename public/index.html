@@ -25,7 +25,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #tr{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:23px;color:#e8e8e8}
 #stats{position:absolute;top:calc(14px + var(--st));left:16px;font-size:13px;color:#6f6f6f;pointer-events:none}
 #hint{position:absolute;bottom:calc(28px + var(--sb));left:0;right:0;text-align:center;font-size:13px;color:#666;transition:opacity .6s;pointer-events:none}
-#hand{position:absolute;left:0;top:0;width:300px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:5;will-change:transform;transform-origin:100% 100%;filter:drop-shadow(0 4px 10px rgba(0,0,0,.8))}
+#hand{position:absolute;left:0;top:0;width:300px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:5;will-change:transform;filter:drop-shadow(0 4px 10px rgba(0,0,0,.8))}
 #hand svg{display:block;width:100%;height:auto;overflow:visible}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
 #modal.open{display:flex}
@@ -374,11 +374,14 @@ function demoFrame(now){
   else { p = 0; hp = 1; shown = i + 1; hand.style.opacity = 0; }
   if (pts.length){
     draw();
-    // Bosh barmoq shariklar ostida chapdan o'ngga suradi (sharikka tegish shart emas).
-    const hw = W * 0.78, tipX = hw * 0.04, tipY = hw * 0.75 * 0.2;
-    const x = W * 0.14 + W * 0.42 * hp, y = H * 0.80;
+    // Bosh barmoq bir qo'lda ushlagandagidek pastdan o'ng yuqoriga yoy bo'ylab suradi
+    // (sharikka tegish shart emas). Yo'l — kvadratik Bezye: boshlanish → nazorat → oxir.
+    const hw = W * 0.78, tipX = hw * 0.04, tipY = hw * 0.75 * 0.2, u = 1 - hp;
+    const x = (u*u*0.29 + 2*u*hp*0.50 + hp*hp*0.90) * W;
+    const y = (u*u*0.92 + 2*u*hp*0.78 + hp*hp*0.74) * H;
     hand.style.width = hw + 'px';
-    hand.style.transform = 'translate(' + (x - tipX) + 'px,' + (y - tipY) + 'px) rotate(' + (6 - 10 * hp) + 'deg)';
+    hand.style.transformOrigin = tipX + 'px ' + tipY + 'px';
+    hand.style.transform = 'translate(' + (x - tipX) + 'px,' + (y - tipY) + 'px) rotate(' + (34 - 26 * hp) + 'deg)';
   }
   if (shown !== demo.shown){
     demo.shown = shown; countEl.textContent = shown;
@@ -389,12 +392,14 @@ function demoFrame(now){
 function startDemo(){
   if (demo) return;
   demo = { t0: performance.now(), shown: -1, raf: 0 };
+  $('hint').style.opacity = 0; // barmoq o'zi ko'rsatadi, yozuv uning ostida qolmasin
   demo.raf = requestAnimationFrame(demoFrame);
 }
 function stopDemo(){
   if (!demo) return;
   cancelAnimationFrame(demo.raf); demo = null;
   hand.style.opacity = 0; p = 0; draw(); render();
+  if (S.total === 0) $('hint').style.opacity = 1;
 }
 app.addEventListener('pointerdown', stopDemo, true);
 modal.addEventListener('pointerdown', stopDemo, true);
