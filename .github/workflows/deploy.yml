@@ -46,10 +46,12 @@ jobs:
           cat tgcloud/lib/config.js
 
       - name: Deploy bot code
-        run: npx tgcloud --no-pager push --force
+        run: |
+          npx tgcloud --no-pager push --force
 
       - name: Sync webhook
         run: npx tgcloud --no-pager webhook sync
 
       - name: Summary
-        run: echo "### 📿 Tasbeh deploy qilindi: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "### 📿 Tasbeh deploy qilindi: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
