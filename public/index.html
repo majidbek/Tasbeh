@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Online Tasbeh</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Cormorant+Garamond:ital,wght@1,500&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+:root{--vh:100vh;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
+body{height:var(--vh)}
+#app{position:relative;max-width:480px;height:100%;margin:0 auto;touch-action:none;color:#fff;font-family:Poppins,sans-serif;overflow:hidden}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#top{position:absolute;top:30%;left:0;right:0;text-align:center;transform:translateY(-50%);pointer-events:none}
+#count{font-size:clamp(88px,27vw,132px);font-weight:700;color:#1ec760;line-height:1;letter-spacing:-2px;transition:transform .12s,color .3s}
+#count.bump{transform:scale(1.05)}
+#count.done{color:#5dffa0;text-shadow:0 0 30px rgba(30,199,96,.6)}
+#target{pointer-events:auto;margin-top:10px;font-size:20px;font-weight:500;color:#bdbdbd;display:inline-flex;gap:8px;align-items:center;cursor:pointer;padding:6px 12px}
+#target svg{width:20px;height:20px;stroke:#bdbdbd}
+#dhikr{position:absolute;top:61%;left:58%;transform:translateX(-50%);text-align:center;cursor:pointer;white-space:nowrap;padding:6px 10px}
+#ar{font-family:Amiri,serif;font-size:31px;direction:rtl;line-height:1.5}
+#tr{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:23px;color:#e8e8e8}
+#stats{position:absolute;top:calc(14px + var(--st));left:16px;font-size:13px;color:#6f6f6f;pointer-events:none}
+#hint{position:absolute;bottom:calc(28px + var(--sb));left:0;right:0;text-align:center;font-size:13px;color:#666;transition:opacity .6s;pointer-events:none}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:9}
+#modal.open{display:flex}
+#sheet{width:100%;max-width:480px;background:#141414;border-radius:20px 20px 0 0;padding:22px 16px calc(22px + var(--sb))}
+#sheet h3{font-size:17px;font-weight:500;margin-bottom:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{background:#222;border:1px solid #2e2e2e;color:#ddd;border-radius:12px;padding:9px 16px;font:500 15px Poppins,sans-serif;cursor:pointer}
+.chip.on{background:#1ec760;color:#000;border-color:#1ec760}
+#tin{width:100%;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:12px;color:#fff;font:500 16px Poppins,sans-serif;padding:12px;margin-bottom:14px;user-select:text;-webkit-user-select:text}
+.btn{width:100%;border:0;border-radius:12px;padding:13px;font:600 15px Poppins,sans-serif;cursor:pointer;margin-top:8px}
+.ok{background:#1ec760;color:#000}
+.rs{background:transparent;color:#ff5c5c;border:1px solid #3a1c1c}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+  <div id="stats"></div>
+  <div id="top">
+    <div id="count">0</div>
+    <div id="target" class="ui">/ <span id="tnum">100</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M14.5 5.5l3 3L9 17H6v-3z"/></svg>
+    </div>
+  </div>
+  <div id="dhikr" class="ui"><div id="ar"></div><div id="tr"></div></div>
+  <div id="hint">Shariklarni o'ngga suring yoki ekranga bosing</div>
+</div>
+
+<div id="modal" class="ui">
+  <div id="sheet">
+    <h3>Maqsad soni</h3>
+    <div class="chips" id="chips"></div>
+    <input id="tin" type="number" inputmode="numeric" min="1" max="100000" placeholder="Boshqa son kiriting">
+    <button class="btn ok" id="save">Saqlash</button>
+    <button class="btn rs" id="reset">Hisobni nolga tushirish</button>
+  </div>
+</div>
+
+<script>
+(function(){
+const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData ? window.Telegram.WebApp : null;
+const can = v => tg && tg.isVersionAtLeast && tg.isVersionAtLeast(v);
+const root = document.documentElement.style;
+
+/* ---------- Telegram Mini App ---------- */
+function applyViewport(){
+  if (!tg) return;
+  if (tg.viewportStableHeight) root.setProperty('--vh', tg.viewportStableHeight + 'px');
+  const s = tg.safeAreaInset || {}, c = tg.contentSafeAreaInset || {};
+  root.setProperty('--st', ((s.top || 0) + (c.top || 0)) + 'px');
+  root.setProperty('--sb', ((s.bottom || 0) + (c.bottom || 0)) + 'px');
+}
+if (tg) {
+  try {
+    tg.ready(); tg.expand();
+    if (can('6.1')) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
+    if (can('7.10')) tg.setBottomBarColor('#000000');
+    if (can('7.7')) tg.disableVerticalSwipes();
+  } catch(e){}
+  applyViewport();
+}
+
+const DH = [
+  {ar:'سُبْحَانَ ٱللَّٰهِ', tr:'SubhanAllah'},
+  {ar:'ٱلْحَمْدُ لِلَّٰهِ', tr:'Alhamdulillah'},
+  {ar:'ٱللَّٰهُ أَكْبَرُ', tr:'Allahu Akbar'},
+  {ar:'أَسْتَغْفِرُ ٱللَّٰهَ', tr:'Astaghfirullah'},
+  {ar:'لَا إِلَٰهَ إِلَّا ٱللَّٰهُ', tr:'La ilaha illallah'},
+  {ar:'ٱللَّٰهُمَّ صَلِّ عَلَىٰ مُحَمَّدٍ', tr:'Allohumma solli ʼalaa Muhammad'}
+];
+
+/* ---------- Saqlash: localStorage + Telegram CloudStorage (qurilmalararo) ---------- */
+const KEY = 'tasbeh_v1';
+let S = {count:0, target:100, dh:3, rounds:0, total:0, ts:0};
+function valid(v){ return v && typeof v === 'object' && Number.isFinite(v.total); }
+try { const v = JSON.parse(localStorage.getItem(KEY)); if (valid(v)) S = Object.assign(S, v); } catch(e){}
+
+const cloud = can('6.9') && tg.CloudStorage;
+let cloudTimer = null;
+function save(){
+  S.ts = Date.now();
+  const json = JSON.stringify(S);
+  try { localStorage.setItem(KEY, json); } catch(e){}
+  if (!cloud) return;
+  clearTimeout(cloudTimer); // tez-tez bosishda bulutga har 1.5s da bir marta yoziladi
+  cloudTimer = setTimeout(() => { try { cloud.setItem(KEY, json); } catch(e){} }, 1500);
+}
+function flushCloud(){
+  if (!cloud || !cloudTimer) return;
+  clearTimeout(cloudTimer); cloudTimer = null;
+  try { cloud.setItem(KEY, JSON.stringify(S)); } catch(e){}
+}
+if (cloud) {
+  try {
+    cloud.getItem(KEY, (err, val) => {
+      if (err || !val) return;
+      try { const v = JSON.parse(val); if (valid(v) && (v.ts || 0) > (S.ts || 0)) { S = Object.assign(S, v); render(); try { localStorage.setItem(KEY, val); } catch(e){} } } catch(e){}
+    });
+  } catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushCloud(); });
+window.addEventListener('pagehide', flushCloud);
+
+const $ = id => document.getElementById(id);
+const app = $('app'), cv = $('c'), ctx = cv.getContext('2d');
+const countEl = $('count');
+
+function hap(type){
+  try {
+    if (tg && can('6.1') && tg.HapticFeedback) {
+      type === 'ok' ? tg.HapticFeedback.notificationOccurred('success') : tg.HapticFeedback.impactOccurred('light');
+    } else if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [40,60,40] : 12);
+  } catch(e){}
+}
+
+function render(){
+  if (!DH[S.dh]) S.dh = 0;
+  countEl.textContent = S.count;
+  $('tnum').textContent = S.target;
+  $('ar').textContent = DH[S.dh].ar;
+  $('tr').textContent = DH[S.dh].tr;
+  $('stats').textContent = 'Davra: ' + S.rounds + '  ·  Jami: ' + S.total;
+}
+
+/* ---------- Geometry ---------- */
+let W, H, pts = [], lens = [], total = 0, r, D, Ls, Rs;
+function bez(t,a,b,c,d){ const u = 1 - t; return u*u*u*a + 3*u*u*t*b + 3*u*t*t*c + t*t*t*d; }
+
+function layout(){
+  const dpr = window.devicePixelRatio || 1;
+  W = app.clientWidth; H = app.clientHeight;
+  if (!W || !H) return;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  r = Math.min(W * 0.064, H * 0.034, 34);
+  D = r * 2.03;
+  const P = [[-0.15,0.70],[0.25,0.60],[0.55,0.52],[1.15,0.505]];
+  pts = []; lens = [0];
+  const n = 400;
+  for (let i = 0; i <= n; i++){
+    const t = i / n;
+    const x = bez(t,P[0][0],P[1][0],P[2][0],P[3][0]) * W;
+    const y = bez(t,P[0][1],P[1][1],P[2][1],P[3][1]) * H;
+    pts.push([x,y]);
+    if (i > 0) lens.push(lens[i-1] + Math.hypot(x - pts[i-1][0], y - pts[i-1][1]));
+  }
+  total = lens[n];
+  Ls = total * 0.36;
+  Rs = total * 0.68;
+  draw();
+}
+
+function at(s){
+  const n = pts.length - 1;
+  if (s <= 0){ const a = pts[0], b = pts[1], l = lens[1]; return [a[0] + (b[0]-a[0])/l*s, a[1] + (b[1]-a[1])/l*s]; }
+  if (s >= total){ const a = pts[n-1], b = pts[n], l = lens[n]-lens[n-1], e = s - total; return [b[0] + (b[0]-a[0])/l*e, b[1] + (b[1]-a[1])/l*e]; }
+  let lo = 0, hi = n;
+  while (hi - lo > 1){ const m = (lo + hi) >> 1; if (lens[m] < s) lo = m; else hi = m; }
+  const f = (s - lens[lo]) / ((lens[hi] - lens[lo]) || 1);
+  return [pts[lo][0] + (pts[hi][0]-pts[lo][0])*f, pts[lo][1] + (pts[hi][1]-pts[lo][1])*f];
+}
+
+function bead(s){
+  const [x,y] = at(s);
+  if (x < -r*2 || x > W + r*2) return;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.8)'; ctx.shadowBlur = r*0.5; ctx.shadowOffsetY = r*0.15;
+  const g = ctx.createRadialGradient(x - r*0.35, y - r*0.4, r*0.08, x, y, r);
+  g.addColorStop(0, '#6a6a6a');
+  g.addColorStop(0.22, '#2a2a2a');
+  g.addColorStop(0.7, '#0b0b0b');
+  g.addColorStop(1, '#000');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  // rim light
+  ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, r - 0.5, Math.PI*0.1, Math.PI*0.9); ctx.stroke();
+  // glossy highlight
+  ctx.fillStyle = 'rgba(255,255,255,.28)';
+  ctx.beginPath(); ctx.ellipse(x - r*0.33, y - r*0.45, r*0.26, r*0.12, -0.55, 0, Math.PI*2); ctx.fill();
+}
+
+let p = 0; // 0..1 harakat bosqichi
+function draw(){
+  if (!pts.length) return;
+  ctx.clearRect(0,0,W,H);
+  const jolt = Math.sin(Math.PI * p) * r * 0.75; // tasbeh o'ngga surilib qaytadi
+  ctx.save(); ctx.translate(jolt, 0);
+
+  // ip
+  ctx.beginPath();
+  const s0 = at(-200), s1 = at(total + 200);
+  ctx.moveTo(s0[0], s0[1]);
+  for (const q of pts) ctx.lineTo(q[0], q[1]);
+  ctx.lineTo(s1[0], s1[1]);
+  ctx.strokeStyle = 'rgba(215,215,215,.8)'; ctx.lineWidth = 1.6; ctx.stroke();
+
+  const span = Rs - Ls;
+  const ms = Ls + span * p;                       // harakatdagi sharik
+  const lp = Math.min(1, p * 1.4);                // chap guruh oldinga siljiydi
+  const push = Math.max(0, Math.min(D, ms + D - Rs)); // o'ng guruhni turtadi
+
+  const nL = Math.ceil(Ls / D) + 3, nR = Math.ceil((total - Rs) / D) + 4;
+  for (let k = nL; k >= 1; k--) bead(Ls - k*D + D*lp);
+  for (let k = nR; k >= 0; k--) bead(Rs + k*D + push);
+  bead(ms);
+  ctx.restore();
+}
+
+/* ---------- Animation ---------- */
+let anim = null, animTo = 0;
+const ease = t => 1 - Math.pow(1 - t, 3);
+function runTo(to, dur, done){
+  if (anim) cancelAnimationFrame(anim);
+  const from = p, t0 = performance.now(); animTo = to;
+  function f(now){
+    const k = Math.min(1, (now - t0) / dur);
+    p = from + (to - from) * ease(k);
+    draw();
+    if (k < 1) anim = requestAnimationFrame(f);
+    else { anim = null; done && done(); }
+  }
+  anim = requestAnimationFrame(f);
+}
+function stopAnim(){
+  if (!anim) return;
+  cancelAnimationFrame(anim); anim = null;
+  if (animTo === 1) commit(); else { p = 0; draw(); }
+}
+
+let doneTimer = null;
+function finishRound(){
+  if (doneTimer){ clearTimeout(doneTimer); doneTimer = null; }
+  countEl.classList.remove('done');
+  if (S.count >= S.target){ S.count = 0; S.rounds++; render(); save(); }
+}
+
+function commit(){
+  p = 0; draw();
+  if (S.count >= S.target) finishRound();
+  S.count++; S.total++;
+  countEl.classList.add('bump');
+  setTimeout(() => countEl.classList.remove('bump'), 120);
+  $('hint').style.opacity = 0;
+  if (S.count >= S.target){
+    hap('ok');
+    countEl.classList.add('done');
+    doneTimer = setTimeout(finishRound, 900);
+  } else hap();
+  render(); save();
+}
+
+function fire(){ stopAnim(); runTo(1, 240, commit); }
+
+/* ---------- Input ---------- */
+let drag = null;
+app.addEventListener('pointerdown', e => {
+  if (e.target.closest('.ui')) return;
+  stopAnim();
+  drag = { x: e.clientX, moved: false };
+  try { app.setPointerCapture(e.pointerId); } catch(_){}
+});
+app.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x;
+  if (Math.abs(dx) > 8) drag.moved = true;
+  if (!drag.moved) return;
+  p = Math.max(0, Math.min(1, dx / ((Rs - Ls) * 0.9)));
+  draw();
+  if (p >= 1){ commit(); drag.x = e.clientX; } // uzluksiz surish
+});
+function up(){
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (!d.moved) fire();
+  else if (p > 0.3) runTo(1, 160, commit);
+  else runTo(0, 180);
+}
+app.addEventListener('pointerup', up);
+app.addEventListener('pointercancel', up);
+
+$('dhikr').addEventListener('click', () => {
+  S.dh = (S.dh + 1) % DH.length; S.count = 0; finishRound(); render(); save(); hap();
+});
+
+/* ---------- Target modal ---------- */
+const modal = $('modal'), chips = $('chips'), tin = $('tin');
+const PRESETS = [33, 99, 100, 500, 1000];
+const backBtn = can('6.1') && tg.BackButton;
+function openModal(){
+  chips.innerHTML = '';
+  PRESETS.forEach(v => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (v === S.target ? ' on' : '');
+    b.textContent = v;
+    b.onclick = () => { tin.value = v; [...chips.children].forEach(c => c.classList.toggle('on', c === b)); };
+    chips.appendChild(b);
+  });
+  tin.value = S.target;
+  modal.classList.add('open');
+  if (backBtn) backBtn.show();
+}
+function closeModal(){
+  tin.blur();
+  modal.classList.remove('open');
+  if (backBtn) backBtn.hide();
+}
+if (backBtn) backBtn.onClick(closeModal);
+$('target').addEventListener('click', openModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+$('save').onclick = () => {
+  const v = parseInt(tin.value, 10);
+  if (v > 0 && v <= 100000){ S.target = v; if (S.count >= v) S.count = 0; }
+  closeModal(); render(); save();
+};
+$('reset').onclick = () => {
+  const doReset = () => {
+    S.count = 0; S.rounds = 0; S.total = 0; finishRound();
+    closeModal(); render(); save(); flushCloud(); hap('ok');
+  };
+  if (can('6.2')) tg.showConfirm('Hisob, davralar va jami nolga tushirilsinmi?', ok => { if (ok) doReset(); });
+  else doReset();
+};
+
+window.addEventListener('resize', layout);
+if (tg) tg.onEvent('viewportChanged', e => { if (!e || e.isStateStable) { applyViewport(); layout(); } });
+if (tg && can('8.0')) { tg.onEvent('safeAreaChanged', applyViewport); tg.onEvent('contentSafeAreaChanged', applyViewport); }
+if (S.total > 0) $('hint').style.opacity = 0;
+render(); layout();
+if (document.fonts) document.fonts.ready.then(render);
+})();
+</script>
+</body>
+</html>

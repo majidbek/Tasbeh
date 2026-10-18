@@ -1,0 +1,55 @@
+name: Deploy to Telegram Serverless
+
+on:
+  push:
+    branches: [main, master, ccr-af7eb665-kg1j35]
+  workflow_dispatch:
+
+concurrency:
+  group: tgcloud-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check token
+        run: |
+          if [ -z "$TGCLOUD_TOKEN" ]; then
+            echo "::error::TGCLOUD_TOKEN secret topilmadi (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      # Repo — yagona manba: CI'da .tgcloud/ holati yo'q, shuning uchun --force.
+      - name: Deploy Mini App (static)
+        run: |
+          mkdir -p .tgcloud
+          npx tgcloud --no-pager push public --force
+
+      - name: Write Mini App URL into bot config
+        run: |
+          URL=$(node -e "const s=require('./.tgcloud/static.json'); if(!s.url) process.exit(1); process.stdout.write(s.url)")
+          echo "Mini App URL: $URL"
+          echo "APP_URL=$URL" >> "$GITHUB_ENV"
+          printf "// CI tomonidan yaratilgan — deploy paytida qayta yoziladi.\nexport const APP_URL = %s;\n" "$(node -e "process.stdout.write(JSON.stringify(process.argv[1]))" "$URL")" > tgcloud/lib/config.js
+          cat tgcloud/lib/config.js
+
+      - name: Deploy bot code
+        run: npx tgcloud --no-pager push --force
+
+      - name: Sync webhook
+        run: npx tgcloud --no-pager webhook sync
+
+      - name: Summary
+        run: echo "### 📿 Tasbeh deploy qilindi: $APP_URL" >> "$GITHUB_STEP_SUMMARY"

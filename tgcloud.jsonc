@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json",
+  // Mini App: public/ papkasi build'siz to'g'ridan-to'g'ri joylanadi.
+  "static": {
+    "source": "public"
+  }
+}
